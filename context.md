@@ -12,11 +12,15 @@ code layout, the output layout, and the "don't break these" guardrails.
 
 | File | Status | Output dir | Purpose |
 |---|---|---|---|
-| `rfem_pipeline.py` | active | `figs_pdf/<sid>/` | **BERT/SST-2** — primary deliverable. Works correctly; bars populated. 10 sentences × 34 PDFs = 340 PDFs. |
-| `rfem_clip_pipeline.py` | active | `figs_pdf_clip/<sid>/` | **CLIP text** (causal). K-σ μ/σ over lower triangle. **Bars come out empty** — reportable phenomenon. 10 sentences × 34 = 340. |
-| `rfem_clip_eos_pipeline.py` | active | `figs_pdf_clip_eos/<sid>/` | **CLIP text** alt calibration — K-σ μ/σ from EOS row only. Also empty bars (BOS sink, 99.4 % of EOS row). 10 sentences × 34 = 340. |
-| `rfem_clip_vision_pipeline.py` | active | `figs_pdf_clip_vision/<img_id>/` | **CLIP vision** (ViT-B/32). Bidirectional attention — works correctly. **Structured stage-subfolder layout** per image. 10 images × 44 PDFs = 440. |
-| `input_images/` | input dir | — | Drop images here for the CLIP vision pipeline (recursively globbed). |
+| `rfem_pipeline.py` | active | `figs_pdf/<sid>/` | **BERT/SST-2** — standard RFEM. Works correctly. 10 sentences × 34 PDFs = 340. |
+| `rfem_bert_sink_aware.py` | active | `figs_bert_sink_aware/<sid>/` | **BERT sink-aware** — fixes CLS/SEP sink. Content words surface clearly. 10 sentences. |
+| `rfem_clip_pipeline.py` | active | `figs_pdf_clip/<sid>/` | **CLIP text** (causal). K-σ μ/σ over lower triangle. **Bars empty** — BOS sink, reportable phenomenon. 10 sentences. |
+| `rfem_clip_text_sink_aware.py` | active | `figs_clip_text_sink_aware/<sid>/` | **CLIP text sink-aware** — fixes BOS/EOS sink. Content tokens surface (small values ~0.001–0.004). 10 sentences. |
+| `rfem_clip_eos_pipeline.py` | active | `figs_pdf_clip_eos/<sid>/` | **CLIP text** alt calibration — EOS row μ/σ. Also empty bars. Kept as diagnostic evidence. |
+| `rfem_clip_vision_pipeline.py` | active | `figs_pdf_clip_vision/<img_id>/` | **CLIP vision standard** (ViT-B/32). Stage-subfoldered. 10 images (I1–I10). |
+| `rfem_clip_vision_sink_aware.py` | active | `figs_clip_vision_sink_aware/<img_id>/` | **CLIP vision sink-aware** — fixes CLS-self sink. Darkened variable-alpha jet overlays. 10 images. |
+| `report_rfem_comparison.tex` | active | `report_rfem_comparison.pdf` | LaTeX visual comparison report. 10 pages. Methodology page frozen. |
+| `input_images/` | input dir | — | Drop images here for vision pipelines (recursively globbed, renamed I1–I10). |
 | `context.md` | meta | — | You are reading it. |
 
 **Both CLIP text files are kept intentionally** — together they demonstrate
@@ -436,6 +440,16 @@ Chronological log of decisions baked into the current code:
 | 35 | Rejected fine-tuning CLIP on Flickr 8k | User asked, I argued against | Reasons: Flickr 8k too small; RFEM is visualisation, not model improvement; pretrained attention is the object of study. |
 | 36 | Rejected caption-conditioned RFEM-Class (both text and vision) | Discussed twice in two different exchanges | User said no both times. Method documented in §17 if they ever change their mind. |
 | 37 | This big `context.md` update | User: "now add the things in context which are not there (all the work we have done till now)" | Captures #21–#36 plus §17 (CLIP vision design notes), updated guardrails §10, refreshed TL;DR §15. |
+| 38 | Sink-aware RFEM implemented for all 3 encoders | Prof. Benois-Pineau's suggestion; user: "implement the sink aware thing" | `rfem_bert_sink_aware.py`, `rfem_clip_text_sink_aware.py`, `rfem_clip_vision_sink_aware.py`. Fix: μ_h/σ_h from read-out row excluding sink columns. See §18. |
+| 39 | Darkened variable-alpha jet overlay for CLIP vision | User: "the maps are like too much on image" / "perfect thank you" | Background darkened ×0.6; alpha proportional to `sqrt(norm_spatial)*0.65`. Applied to both vision scripts. See §19. |
+| 40 | Input images renamed I1–I10 | User: "rename images to I1, I2 and re run both vision codes" | Avoids hash names in report captions; both vision scripts regenerated. |
+| 41 | SA-RFEM K-sweep titles use "SA-RFEM" not "RFEM" | User: "in sink aware rfem in vision code images in label use SA-RFEM" | Distinguishes standard and sink-aware outputs visually. |
+| 42 | Visual comparison report `report_rfem_comparison.tex` created | User: "just create a simple report with all visualisations" | LaTeX report, 10 pages, one section per encoder, methodology page frozen. See §21. |
+| 43 | Report restructured to exact layout spec | User: detailed per-section layout instructions (multiple rounds) | BERT/CLIP-Text: vanilla→rollout→head rollout→agg matrix→std 4K row→SA K-sweep. Vision: original+vanilla+rollout→head overlays→agg matrix→agg overlay→std 4K→SA 4K. |
+| 44 | CLIP-Text K-sweep changed to show raw (unnormalised) bars | User: "instead of using normalize bars, use un normalized ones" | Reverted normalisation in `plot_k_sweep_importance`; bars now show raw 0.001–0.004 values. |
+| 45 | Stage D SA-RFEM uses single K-sweep importance figure | User: "here are the location... they are already in a one" pointing to K-sweep file | Replaced 4 individual subfigures with `S1_M3_step4_K_sweep_importance.pdf` (full width) for both BERT and CLIP-Text SA-RFEM. |
+| 46 | CLIP-Vision report: added weighted aggregation matrix step | User: "you missed few steps" | Added the 50×50 aggregation matrix comparison (std vs SA) BEFORE the overlay comparison. Both `matrix.pdf` and `overlay.pdf` shown separately. |
+| 47 | `context.md` updated again | User: "update in context.md file what we have done till now" | This update. Captures §18–§22. |
 
 ### Conversational style notes
 
@@ -936,4 +950,232 @@ If only five: 0 → 4 → 6 → 9 → 12 → 13.
 `w_h` is non-degenerate here (heads have different maxes — e.g.
 0.45, 0.52, 0.66, 0.70 …) because bidirectional attention doesn't
 have the CLIP-text BOS-row collapse. The weighting is doing real work.
+
+---
+
+## 18. Sink-Aware RFEM — new pipelines (May 2026)
+
+After establishing the "empty bars are the phenomenon" narrative (§16, §17),
+the user decided to implement a **fix** as the positive contribution of the
+work. The fix was proposed by Prof. Jenny Benois-Pineau:
+
+> "μ_h and σ_h are computed from the read-out row only, **excluding the
+> sink token columns**. The threshold is calibrated to the content-token
+> distribution, not the sink-dominated whole-matrix distribution."
+
+### Three new scripts
+
+| Script | Output dir | Sink token(s) excluded |
+|---|---|---|
+| `rfem_bert_sink_aware.py` | `figs_bert_sink_aware/<sid>/` | `[CLS]` and `[SEP]` columns from CLS row |
+| `rfem_clip_text_sink_aware.py` | `figs_clip_text_sink_aware/<sid>/` | BOS and EOS columns from EOS row |
+| `rfem_clip_vision_sink_aware.py` | `figs_clip_vision_sink_aware/<img_id>/` | CLS-self column (position 0) from CLS row |
+
+All three inherit ALL previous user modifications:
+- Value-preserving K-σ filter (not binary).
+- Weighted aggregation, no `/Σw_h`.
+
+### The fix in code (same pattern across all three)
+
+```python
+def rfem_k_sigma_filter_sink_aware(head_rollouts, read_out_pos, k, sink_indices):
+    for h in range(H):
+        row = head_rollouts[h, read_out_pos, :]          # read-out row only
+        content = [v for i,v in enumerate(row) if i not in sink_indices]
+        mu_h  = mean(content)
+        sig_h = std(content)
+        threshold_h = mu_h + k * sig_h
+        head_masks[h] = where(head_rollouts[h] >= threshold_h,
+                              head_rollouts[h], 0)        # value-preserving
+```
+
+Key distinction from the standard pipeline:
+- **Standard**: μ_h and σ_h from the full lower-triangle (or full matrix).
+  Sink entries inflate σ_h → threshold exceeds all content tokens.
+- **Sink-aware**: μ_h and σ_h from the **read-out row excluding sink columns**.
+  Threshold calibrates to content-token scale → content tokens survive.
+
+### BERT sink-aware results
+
+With `[CLS]`/`[SEP]` excluded from CLS row statistics:
+- Content words (e.g. *beautiful*, *resilience*, *portrait*) receive scores
+  in the 0.02–0.14 range at K=0.5.
+- Scores stabilise (token ranking converges) around K=0.5.
+- `[CLS]`/`[SEP]` are suppressed from the final bar because sink columns are
+  zeroed out by the threshold being calibrated to content values.
+
+### CLIP-Text sink-aware results
+
+With BOS/EOS excluded from EOS row statistics:
+- Content token scores are in the 0.001–0.004 range (causal attention
+  dilutes EOS row values — inherently 10-30× smaller than BERT CLS row).
+- This is not a bug; it's a structural property of causal LM attention.
+- Content tokens (film, portrait, resilience) still rank correctly.
+- The K-sweep plot shows raw unnormalised scores with 4-decimal labels
+  so the values are legible despite being small.
+
+### CLIP-Vision sink-aware results
+
+With CLS-self position (col 0) excluded from CLS row statistics:
+- The CLS-CLS spike no longer inflates σ_h.
+- Content patches survive at K=0.5 and produce a focused spatial heatmap.
+- Overlay uses a **darkened-background variable-alpha jet** style (see §19).
+
+---
+
+## 19. CLIP-Vision overlay style — darkened variable-alpha (May 2026)
+
+The original vision overlay used `jet` with fixed α=0.55 on the original
+image. The user asked for a "more focused" style that makes salient patches
+stand out more aggressively.
+
+### New overlay recipe (applied in both vision scripts)
+
+```python
+darkened = (image_disp.astype(float32) * 0.6).clip(0, 255).astype(uint8)
+ax.imshow(darkened)                             # step 1: darken background
+norm_spatial = (spatial - sp_min) / (sp_max - sp_min)
+alpha_map    = (norm_spatial ** 0.5) * 0.65    # step 2: variable alpha
+cmap_fn      = plt.get_cmap("jet")
+rgba         = cmap_fn(norm_spatial)
+rgba[..., 3] = alpha_map
+ax.imshow(rgba)                                 # step 3: jet layer on top
+```
+
+- Background is darkened to 60% brightness so low-alpha overlay areas recede.
+- Alpha is proportional to `sqrt(norm_spatial)` so low-salience patches are
+  transparent, high-salience patches are fully opaque jet.
+- Applied to: K-sweep overlays, per-head overlays, aggregated overlays.
+- Applied to **both** `rfem_clip_vision_pipeline.py` AND
+  `rfem_clip_vision_sink_aware.py`.
+
+### Guardrails for this style
+
+- Do NOT revert to flat α=0.55 on the original image. The darkened style
+  is the current canonical look for vision overlays.
+- K=0.0 and K=0.3 were called "diffuse" by the user and excluded from the
+  report at one point. Later reinstated for the full 4-K-value row. The
+  four-value row is the current spec.
+
+---
+
+## 20. Image renaming (May 2026)
+
+The input images for CLIP vision had hash-based filenames like
+`10815824_2997e03d76.jpg`. Renamed to `I1.jpg` through `I10.jpg`:
+
+```
+10815824_2997e03d76.jpg → I1.jpg
+(9 others similarly renamed)
+```
+
+Both vision scripts were re-run after renaming. Output directories are now
+`figs_pdf_clip_vision/I1/`, `figs_clip_vision_sink_aware/I1/`, etc.
+
+The report macros were updated to match:
+```latex
+\newcommand{\CLIPVstd}{figs_pdf_clip_vision/I1}
+\newcommand{\CLIPVsa}{figs_clip_vision_sink_aware/I1}
+```
+
+---
+
+## 21. Visual comparison report — report_rfem_comparison.tex (May 2026)
+
+A LaTeX report was created to present Standard RFEM vs Sink-Aware RFEM
+side by side for all three encoders (BERT, CLIP-Text, CLIP-Vision).
+
+### File
+
+`report_rfem_comparison.tex` → compiles to `report_rfem_comparison.pdf`
+(currently 10 pages).
+
+### Page 1 — Methodology (FIXED, do not change)
+
+Explains RFEM stages A–D with the exact formulas. Also explains the
+sink problem and the sink-aware fix. This page must remain unchanged
+between report versions.
+
+### Report structure per encoder
+
+**BERT S1** and **CLIP-Text S1** follow identical structure:
+
+1. Last-layer mean attention matrix + vanilla CLS/EOS score bar (side by side)
+2. Standard attention rollout CLS/EOS bar (full width)
+3. `\subsection*{RFEM — Stage A}` — Head 1 + Head 12 rolled-out matrices (side by side)
+4. `\subsection*{RFEM — Stage C}` — Weighted aggregation matrix: Std vs SA-RFEM (side by side)
+5. `\subsection*{Stage D — Standard RFEM}` — 4 K-value individual bar charts in one row
+6. `\subsection*{Stage D — Sink-Aware RFEM}` — Single K-sweep importance figure (full width, all 4 K panels)
+
+**CLIP-Vision I1**:
+
+1. Original + vanilla overlay + rollout overlay (3 in one row)
+2. Head 1 + Head 12 overlays (side by side, standard only — same for RFEM/SA-RFEM at this stage)
+3. Weighted aggregation **matrix** (Std vs SA-RFEM side by side) ← matrix heatmap
+4. Weighted aggregation **overlay** (Std vs SA-RFEM side by side) ← jet overlay on image
+5. Standard RFEM K-sweep overlays (all 4 K values in one row)
+6. SA-RFEM K-sweep overlays (all 4 K values in one row)
+
+### Figure file sources
+
+| Report macro | Path |
+|---|---|
+| `\BERT` | `figs_pdf/S1` |
+| `\BERTsa` | `figs_bert_sink_aware/S1` |
+| `\CLIPTxt` | `figs_clip_text_sink_aware/S1` |
+| `\CLIPVstd` | `figs_pdf_clip_vision/I1` |
+| `\CLIPVsa` | `figs_clip_vision_sink_aware/I1` |
+
+CLIP-Text **standard** RFEM figures (stage C and D standard) use hardcoded
+path `figs_pdf_clip/S1/` (no macro) because `\CLIPTxt` points to the
+sink-aware directory.
+
+### K-sweep importance figures (Stage D SA-RFEM)
+
+For BERT and CLIP-Text, the Stage D SA-RFEM figure is the **single K-sweep
+importance file** (`S1_M3_step4_K_sweep_importance.pdf`) showing all 4 K
+panels in one figure with horizontal bars (tokens on y-axis, raw unnormalised
+importance on x-axis). This is generated by `plot_k_sweep_importance` in each
+sink-aware script.
+
+At one point the CLIP-Text K-sweep was normalised (bars filled plot space but
+raw values on labels). This was reverted — both scripts now output raw values.
+
+### Guardrails for the report
+
+- Page 1 (methodology) is frozen. Do not restructure it.
+- All standalone (non-subfigure) figures use `\linewidth`.
+- 4-subfigure rows use `0.235\linewidth` per subfigure.
+- 2-subfigure rows use `0.48\linewidth` per subfigure.
+- 3-subfigure rows use `0.30\linewidth` per subfigure.
+- Captions must be descriptive: explain WHAT is shown AND what the
+  sink/sink-aware difference means. Do not use one-word captions.
+
+---
+
+## 22. Open questions / things not yet resolved
+
+- **`plot_matrix_heatmap` stats from whole matrix vs CLS row**: The μ and σ
+  shown in the title of the vanilla attention matrix (`S1_M1_vanilla_matrix.pdf`)
+  are computed from the **full T×T matrix** (`matrix.mean()`, `matrix.std()`).
+  The user asked about this in May 2026. It has NOT yet been changed.
+  If they want CLS-row-specific stats, change line ~127:
+  ```python
+  # current:
+  mu  = float(matrix.mean())
+  sig = float(matrix.std())
+  # to show CLS-row stats instead:
+  mu  = float(matrix[0].mean())
+  sig = float(matrix[0].std())
+  ```
+  This would only affect the title annotation — not the filter, not the figure content.
+
+- **Sentences S2–S10** for sink-aware pipelines: Only S1 figures are used in
+  the report. All 10 sentences are processed by the scripts, but only S1 is
+  shown. The report could be extended to compare across sentences.
+
+- **SA-RFEM for CLIP-Vision using K-sweep single figure**: Currently the
+  CLIP-Vision SA-RFEM K-sweep uses 4 individual subfigures in the report.
+  BERT and CLIP-Text SA-RFEM use the single `K_sweep_importance.pdf` file.
+  Vision doesn't have an equivalent (it uses spatial overlays, not token bars).
 
